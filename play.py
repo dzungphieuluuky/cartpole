@@ -1,36 +1,32 @@
-import gym
+import gymnasium as gym
 import numpy as np
+import network
+import torch
 
 env = gym.make('CartPole-v1', render_mode='human')
-num_bucket = 20
-discrete_os = [num_bucket] * len(env.observation_space.low)
-discrete_os_window = (env.observation_space.high - env.observation_space.low) / discrete_os
 
-def play(times):
-    q_table = np.load('cartpole_qtable.npy')
-    performance = 0
-    for time in range(times):
-        state = np.array(env.reset()[0], dtype=object)
+def play():
+    done = False
+    total_reward = 0
+    observation_size = env.observation_space.shape[0]
+    action_size = env.action_space.n
+    mynet = network.Net(observation_size, action_size)
+    mynet.load_state_dict(torch.load("cartpole.pth"))
+    state = np.array(env.reset()[0], dtype=float)
 
-        def get_discrete_state(state):
-            dis = (state - env.observation_space.low) / discrete_os_window
-            return tuple(dis.astype(int))
-        
-        done = False
-        total_reward = 0
-        while not done:
-            dis_state = get_discrete_state(state)
-            action = np.argmax(q_table[dis_state])
-            next_state, reward, done, truncate, info = env.step(action)
-            if done or truncate:
-                break
+    while not done:
+        state = torch.FloatTensor(state)
+        actions = mynet(state)
+        action = torch.argmax(actions)
+        action = np.array(action)
+        action = np.astype(action, int)
+        next_state, reward, done, truncate, info = env.step(action)
+        if done or truncate:
+            break
+        total_reward += reward
+        state = next_state
+    
+    print(f'Total Reward: {total_reward}')
 
-            total_reward += reward
-            state = next_state
-        
-        print(f'Total Reward: {total_reward}')
-        performance += total_reward
-    return performance/times
-
-performace = play(100)
-print(f"Performance: {performace}")
+if __name__ == "__main__":
+    play()
